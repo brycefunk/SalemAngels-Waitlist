@@ -3,14 +3,39 @@
 <head>
   <meta charset="utf-8" />
   <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Montserrat:wght@400;600&display=swap" rel="stylesheet">
   <title>Salem Angels | Waitlist Map</title>
 
   <link href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" rel="stylesheet" />
   <style>
     html, body { height: 100%; margin: 0; }
     #map { height: 100vh; width: 100%; }
-    .popup { min-width: 240px; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
-    .popup h3 { margin: 0 0 6px; font-size: 16px; }
+    .popup {
+  font-family: 'Montserrat', sans-serif;
+  font-size: 14px;
+  line-height: 1.4;
+  max-width: 320px;
+  max-height: 260px;
+  overflow: auto;
+  white-space: normal;
+  word-wrap: break-word;
+  overflow-wrap: anywhere;
+
+  background: #f8f9fb;         /* light background */
+  border-radius: 8px;
+  padding: 10px 12px;
+  box-shadow: 0 2px 10px rgba(0,0,0,0.15);
+}
+    .popup p {margin: 6px 0 0; }
+    .popup h3 { 
+      margin: 0 0 6px;
+      font-size: 16px;
+      font-weight: 600;
+      color: #333;
+    font-family: 'Montserrat', sans-serif;
+  }
   </style>
 </head>
 <body>
@@ -37,17 +62,43 @@
 
   // --- Helpers ---
   async function fetchCSV(url) {
-    const txt = await (await fetch(url, { cache: "no-store" })).text();
-    const lines = txt.trim().split(/\r?\n/);
-    const headers = lines[0].split(",").map(h => h.trim());
-    return lines.slice(1).map(line => {
-      // simple split — avoid commas in fields or quote those cells in Sheets
-      const cells = line.split(",").map(v => v.trim());
-      const row = {};
-      headers.forEach((h, i) => row[h] = cells[i] ?? "");
-      return row;
-    });
+  const txt = await (await fetch(url, { cache: "no-store" })).text();
+  const lines = txt.replace(/\r\n?/g, "\n").split("\n").filter(l => l.length > 0);
+
+  function splitLine(line) {
+    const cells = [];
+    let cur = "", inQ = false;
+    for (let i = 0; i < line.length; i++) {
+      const ch = line[i];
+      if (ch === '"') {
+        if (inQ && line[i + 1] === '"') { cur += '"'; i++; }  // escaped quote ("")
+        else { inQ = !inQ; }
+      } else if (ch === ',' && !inQ) {
+        cells.push(cur); cur = "";
+      } else {
+        cur += ch;
+      }
+    }
+    cells.push(cur);
+    return cells;
   }
+
+  const headers = splitLine(lines[0]).map(h => h.trim());
+  return lines.slice(1).map(line => {
+    const cells = splitLine(line);
+    const row = {};
+    headers.forEach((h, i) => {
+      let v = (cells[i] ?? "");
+      // trim *outside* quotes; keep commas inside quoted fields
+      v = v.trim();
+      if (v.startsWith('"') && v.endsWith('"')) v = v.slice(1, -1);
+      v = v.replace(/""/g, '"'); // unescape quotes
+      row[h] = v;
+    });
+    return row;
+  });
+}
+
 
   async function loadAreaIndex() {
     return await (await fetch(AREA_INDEX_URL, { cache: "no-store" })).json();
@@ -164,7 +215,7 @@ const area = (r.area || "").trim();
           <div class="popup">
             <h3>${p.display_name}</h3>
             <div>${p.program}${p.area ? ` · ${p.area}` : ""}${p.city ? ` · ${p.city}` : ""}</div>
-            <div style="margin-top:6px">${p.summary || ""}</div>
+            ${p.summary ? `<p><strong>Summary:</strong> ${p.summary}</p>` : ""}
             ${(() => {
   let needs = [];
   if (Array.isArray(p.needs)) {
