@@ -1,1 +1,85 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Salem Angels | Waitlist Map</title>
+
+  <link href="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.css" rel="stylesheet" />
+  <style>
+    html, body { height: 100%; margin: 0; }
+    #map { height: 100vh; width: 100%; }
+    .popup { min-width: 240px; font: 14px/1.4 system-ui, -apple-system, Segoe UI, Roboto, sans-serif; }
+    .popup h3 { margin: 0 0 6px; font-size: 16px; }
+  </style>
+</head>
+<body>
+  <div id="map"></div>
+
+  <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
+  <script>
+    const MAPTILER_KEY = o15caqslE6PxDORwZdRo;
+
+    const map = new maplibregl.Map({
+      container: 'map',
+      style: `https://api.maptiler.com/maps/streets/style.json?key=${MAPTILER_KEY}`,
+      center: [-123.04, 44.94], // Salem-ish
+      zoom: 11
+    });
+
+    map.addControl(new maplibregl.NavigationControl(), 'top-left');
+
+    map.on('load', () => {
+      map.addSource('families', {
+        type: 'geojson',
+        data: 'data/waitlist.geojson'
+      });
+
+      // Simple circles for now (we'll swap to custom icons later)
+      map.addLayer({
+        id: 'families-circles',
+        type: 'circle',
+        source: 'families',
+        paint: {
+          'circle-radius': 8,
+          'circle-stroke-width': 1.5,
+          'circle-stroke-color': '#ffffff',
+          'circle-color': [
+            'match',
+            ['get','urgency'],
+            'high', '#E53935',
+            'medium', '#FB8C00',
+            'low', '#43A047',
+            /* default */ '#536DFE'
+          ]
+        }
+      });
+
+      // Click → popup
+      map.on('click', 'families-circles', (e) => {
+        const f = e.features[0];
+        const p = f.properties;
+        const coords = f.geometry.coordinates.slice();
+
+        const html = `
+          <div class="popup">
+            <h3>${p.display_name || 'Family'}</h3>
+            <div>${p.summary || ''}</div>
+            ${p.detail_url ? `<div style="margin-top:8px;"><a href="${p.detail_url}" target="_parent" rel="noopener">Read more →</a></div>` : ''}
+          </div>
+        `;
+
+        new maplibregl.Popup({ offset: 16 })
+          .setLngLat(coords)
+          .setHTML(html)
+          .addTo(map);
+      });
+
+      // Pointer cursor
+      map.on('mouseenter', 'families-circles', () => map.getCanvas().style.cursor = 'pointer');
+      map.on('mouseleave', 'families-circles', () => map.getCanvas().style.cursor = '');
+    });
+  </script>
+</body>
+</html>
 
