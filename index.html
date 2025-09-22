@@ -23,68 +23,179 @@
 </script>
 
   <script>
-    const MAPTILER_KEY = "o15caqslE6PxDORwZdRo";
+  const MAPTILER_KEY = "o15caqslE6PxDORwZdRo";
 
-    const map = new maplibregl.Map({
-      container: 'map',
-      style: `https://api.maptiler.com/maps/basic-v2/style.json?key=${MAPTILER_KEY}`,
-      center: [-123.04, 44.94], // Salem-ish
-      zoom: 11
+  // === CONFIG: paste your published Google Sheet CSV URL ===
+  const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS5B8d-HEQNMYPh2Udg6W2jdN-Mjo4MYCF5In8ZyUrWK30P4fuRlSdh-SaiZrJDXEVgXXWud3ln2xOF/pub?output=csv";
+
+  // Files in your repo
+  const AREA_INDEX_URL = "data/area_centroids_salem.json";
+  const ICONS = {
+    LoveBox: { name: "lovebox", path: "assets/icons/lovebox-pin.png" },
+    "Dare to Dream": { name: "daretodream", path: "assets/icons/daretodream-pin.png" }
+  };
+
+  // --- Helpers ---
+  async function fetchCSV(url) {
+    const txt = await (await fetch(url, { cache: "no-store" })).text();
+    const lines = txt.trim().split(/\r?\n/);
+    const headers = lines[0].split(",").map(h => h.trim());
+    return lines.slice(1).map(line => {
+      // simple split — avoid commas in fields or quote those cells in Sheets
+      const cells = line.split(",").map(v => v.trim());
+      const row = {};
+      headers.forEach((h, i) => row[h] = cells[i] ?? "");
+      return row;
     });
+  }
 
-    map.addControl(new maplibregl.NavigationControl(), 'top-left');
+  async function loadAreaIndex() {
+    return await (await fetch(AREA_INDEX_URL, { cache: "no-store" })).json();
+  }
 
-    map.on('load', () => {
-      map.addSource('families', {
-        type: 'geojson',
-        data: 'data/waitlist.geojson'
+  function jitter([lng, lat]) {
+    const meters = 300 + Math.random() * 300; // 300–600 m
+    const theta = Math.random() * 2 * Math.PI;
+    const dLat = (meters * Math.cos(theta)) / 111320;
+    const dLng = (meters * Math.sin(theta)) / (111320 * Math.cos(lat * Math.PI / 180));
+    return [lng + dLng, lat + dLat];
+  }
+
+  function rowsToGeoJSON(rows, areaIndex) {
+    const features = [];
+    for (const r of rows) {
+const progRaw = (r.program || "").trim();
+const prog = /dare\s*to\s*dream/i.test(progRaw) ? "Dare to Dream" : "LoveBox";
+const area = (r.area || "").trim();
+      // Prefer explicit lat/lon if provided (e.g., a public meeting place), otherwise area→centroid+jitter
+      let lng = parseFloat(r.lon), lat = parseFloat(r.lat);
+      if (!(isFinite(lng) && isFinite(lat))) {
+        if (area && areaIndex[area]) {
+          [lng, lat] = jitter(areaIndex[area]);
+        } else {
+          // skip rows we can’t place safely
+          continue;
+        }
+      }
+      features.push({
+        type: "Feature",
+        geometry: { type: "Point", coordinates: [lng, lat] },
+        properties: {
+          id: r.id || "",
+          display_name: r.display_name || "Family",
+          program: prog,                           // LoveBox | Dare to Dream
+          summary: r.summary || "",
+          city: r.city || "",
+          area: area || "",
+          needs: (r.needs || "").split(";").map(s => s.trim()).filter(Boolean),
+          urgency: (r.urgency || "medium").toLowerCase(),
+          status: (r.status || "waitlist").toLowerCase(),
+          iconKey: ICONS[prog]?.name || ICONS.LoveBox.name // default icon
+        }
+      });
+    }
+    return { type: "FeatureCollection", features };
+  }
+
+  // --- Map init ---
+  const map = new maplibregl.Map({
+    container: 'map',
+    style: `https://api.maptiler.com/maps/basic/style.json?key=${MAPTILER_KEY}`,
+    center: [-123.04, 44.94],
+    zoom: 11
+  });
+  map.addControl(new maplibregl.NavigationControl(), 'top-left');
+// Error Logging
+  map.on('error', (e) => console.error('Map error:', e && e.error));
+
+  map.on('load', async () => {
+    try {
+      const [areas, rows] = await Promise.all([loadAreaIndex(), fetchCSV(SHEET_CSV_URL)]);
+      const geo = rowsToGeoJSON(rows, areas);
+
+      map.addSource('families', { type: 'geojson', data: geo });
+
+      // Load both icons, then draw
+      const loadIcon = (def) => new Promise((resolve, reject) => {
+        map.loadImage(def.path, (err, img) => {
+          if (err) return reject(err);
+          if (!map.hasImage(def.name)) map.addImage(def.name, img);
+          resolve();
+        });
+      });
+      await Promise.all(Object.values(ICONS).map(loadIcon));
+
+      // Symbol layer uses icon-image by property
+      map.addLayer({
+        id: 'families-pins',
+        type: 'symbol',
+        source: 'families',
+        layout: {
+          'icon-image': ['get', 'iconKey'], // properties.iconKey matches our added images by name
+          'icon-size': 0.9,
+          'icon-anchor': 'bottom',
+          'icon-allow-overlap': true
+        }
       });
 
-      // Simple circles for now (we'll swap to custom icons later)
+      // Soft urgency halo
       map.addLayer({
-        id: 'families-circles',
+        id: 'families-halo',
         type: 'circle',
         source: 'families',
         paint: {
-          'circle-radius': 8,
-          'circle-stroke-width': 1.5,
-          'circle-stroke-color': '#ffffff',
+          'circle-radius': 10,
           'circle-color': [
             'match',
             ['get','urgency'],
             'high', '#E53935',
             'medium', '#FB8C00',
             'low', '#43A047',
-            /* default */ '#536DFE'
-          ]
+            /* default */ '#607D8B'
+          ],
+          'circle-opacity': 0.15
         }
       });
 
-      // Click → popup
-      map.on('click', 'families-circles', (e) => {
-        const f = e.features[0];
-        const p = f.properties;
-        const coords = f.geometry.coordinates.slice();
-
+      // Popup
+      map.on('click', 'families-pins', (e) => {
+        const f = e.features[0], p = f.properties;
         const html = `
           <div class="popup">
-            <h3>${p.display_name || 'Family'}</h3>
-            <div>${p.summary || ''}</div>
-            ${p.detail_url ? `<div style="margin-top:8px;"><a href="${p.detail_url}" target="_parent" rel="noopener">Read more →</a></div>` : ''}
+            <h3>${p.display_name}</h3>
+            <div>${p.program}${p.area ? ` · ${p.area}` : ""}${p.city ? ` · ${p.city}` : ""}</div>
+            <div style="margin-top:6px">${p.summary || ""}</div>
+            ${(() => {
+  let needs = [];
+  if (Array.isArray(p.needs)) {
+    needs = p.needs;
+  } else if (typeof p.needs === "string" && p.needs.trim()) {
+    try {
+      const parsed = JSON.parse(p.needs);
+      needs = Array.isArray(parsed) ? parsed : p.needs.split(";").map(s=>s.trim()).filter(Boolean);
+    } catch {
+      needs = p.needs.split(";").map(s=>s.trim()).filter(Boolean);
+    }
+  }
+  return needs.length ? `<div style="margin-top:6px"><strong>Needs:</strong> ${needs.join(", ")}</div>` : "";
+})()}
+
           </div>
         `;
-
         new maplibregl.Popup({ offset: 16 })
-          .setLngLat(coords)
+          .setLngLat(f.geometry.coordinates)
           .setHTML(html)
           .addTo(map);
       });
 
-      // Pointer cursor
-      map.on('mouseenter', 'families-circles', () => map.getCanvas().style.cursor = 'pointer');
-      map.on('mouseleave', 'families-circles', () => map.getCanvas().style.cursor = '');
-    });
-  </script>
+      map.on('mouseenter', 'families-pins', () => map.getCanvas().style.cursor = 'pointer');
+      map.on('mouseleave', 'families-pins', () => map.getCanvas().style.cursor = '');
+
+    } catch (e) {
+      console.error("Load error:", e);
+    }
+  });
+</script>
 </body>
 </html>
 
