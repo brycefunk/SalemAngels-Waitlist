@@ -18,7 +18,12 @@
 
   <script src="https://unpkg.com/maplibre-gl@3.6.1/dist/maplibre-gl.js"></script>
   <script>
-    const MAPTILER_KEY = o15caqslE6PxDORwZdRo;
+  // Show any MapLibre/network errors in the console
+  window.addEventListener('error', (e) => console.error('JS error:', e.error || e.message));
+</script>
+
+  <script>
+    const MAPTILER_KEY = "o15caqslE6PxDORwZdRo";
 
     const map = new maplibregl.Map({
       container: 'map',
