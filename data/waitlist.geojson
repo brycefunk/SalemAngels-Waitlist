@@ -1,1 +1,21 @@
+{
+  "type": "FeatureCollection",
+  "features": [
+    {
+      "type":"Feature",
+      "geometry":{"type":"Point","coordinates":[-123.035, 44.942]},
+      "properties":{
+        "id":"sample_001",
+        "display_name":"North Salem Family",
+        "summary":"Two kids under 8; help with meals and rides.",
+        "city":"Salem",
+        "zip":"97301",
+        "needs":["meals","transport"],
+        "urgency":"high",
+        "status":"waitlist",
+        "detail_url":"https://salemangels.org/"
+      }
+    }
+  ]
+}
 
