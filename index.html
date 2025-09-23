@@ -23,7 +23,7 @@
   word-wrap: break-word;
   overflow-wrap: anywhere;
 
-  background: #f8f9fb;         /* light background */
+  background: #e1dbcb;         /* light background */
   border-radius: 8px;
   padding: 10px 12px;
   box-shadow: 0 2px 10px rgba(0,0,0,0.15);
@@ -50,10 +50,10 @@
   <script>
   const MAPTILER_KEY = "o15caqslE6PxDORwZdRo";
 
-  // === CONFIG: paste your published Google Sheet CSV URL ===
-  const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS5B8d-HEQNMYPh2Udg6W2jdN-Mjo4MYCF5In8ZyUrWK30P4fuRlSdh-SaiZrJDXEVgXXWud3ln2xOF/pub?output=csv";
+  // === CONFIG: Google Sheet CSV URL ===
+  const SHEET_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vS5B8d-HEQNMYPh2Udg6W2jdN-Mjo4MYCF5In8ZyUrWK30P4fuRlSdh-SaiZrJDXEVgXXWud3ln2xOF/pub?gid=0&single=true&output=csv";
 
-  // Files in your repo
+  // Icon files in repo
   const AREA_INDEX_URL = "data/area_centroids_salem.json";
   const ICONS = {
     LoveBox: { name: "lovebox", path: "assets/icons/lovebox-pin.png" },
@@ -118,13 +118,13 @@
 const progRaw = (r.program || "").trim();
 const prog = /dare\s*to\s*dream/i.test(progRaw) ? "Dare to Dream" : "LoveBox";
 const area = (r.area || "").trim();
-      // Prefer explicit lat/lon if provided (e.g., a public meeting place), otherwise area→centroid+jitter
+      // Prefer explicit lat/lon if provided, otherwise area→centroid+jitter
       let lng = parseFloat(r.lon), lat = parseFloat(r.lat);
       if (!(isFinite(lng) && isFinite(lat))) {
         if (area && areaIndex[area]) {
           [lng, lat] = jitter(areaIndex[area]);
         } else {
-          // skip rows we can’t place safely
+          // skip rows that can’t place safely
           continue;
         }
       }
@@ -182,7 +182,7 @@ const area = (r.area || "").trim();
         type: 'symbol',
         source: 'families',
         layout: {
-          'icon-image': ['get', 'iconKey'], // properties.iconKey matches our added images by name
+          'icon-image': ['get', 'iconKey'], // properties.iconKey matches added images by name
           'icon-size': 0.9,
           'icon-anchor': 'bottom',
           'icon-allow-overlap': true
