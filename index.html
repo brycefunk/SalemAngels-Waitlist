@@ -103,9 +103,9 @@
   async function loadAreaIndex() {
     return await (await fetch(AREA_INDEX_URL, { cache: "no-store" })).json();
   }
-
+  // Adds random jitter to each point, new jitter each time. Fancy math stuff. 
   function jitter([lng, lat]) {
-    const meters = 300 + Math.random() * 300; // 300–600 m
+    const meters = 1000 + Math.random() * 1000; // 300–600 m
     const theta = Math.random() * 2 * Math.PI;
     const dLat = (meters * Math.cos(theta)) / 111320;
     const dLng = (meters * Math.sin(theta)) / (111320 * Math.cos(lat * Math.PI / 180));
